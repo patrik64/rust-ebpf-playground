@@ -8,10 +8,6 @@ the visualizer.
 
 ![eBPF Playground — editor, live bytecode, registers, and stack mid-execution](docs/playground.jpg)
 
-Companion project to [`../ebpf`](../ebpf) (KernelScope), which runs *real*
-eBPF against a Linux kernel; this one reimplements the machine so you can
-watch it work instruction by instruction.
-
 ```
 ┌──────────────────────────── Browser tab ────────────────────────────┐
 │  ebpf-vm (Rust → WASM)                    SvelteKit                 │
