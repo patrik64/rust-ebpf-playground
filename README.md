@@ -27,8 +27,9 @@ watch it work instruction by instruction.
 ## Run
 
 ```sh
-cd web && pnpm install && pnpm dev
-# → http://localhost:5174
+cd web
+pnpm i
+pnpm dev
 ```
 
 Client-only — no backend, no Linux, runs natively on macOS. `pnpm build`
