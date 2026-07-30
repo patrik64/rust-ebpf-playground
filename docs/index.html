@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>eBPF Playground — slide deck</title>
+<style>
+	:root {
+		--page: #0d0d0d; --surface: #1a1a19; --surface2: #222221;
+		--text: #ffffff; --text2: #c3c2b7; --muted: #898781;
+		--border: rgba(255, 255, 255, 0.1); --grid: #2c2c2a;
+		--accent: #9085e9; --accent-soft: rgba(144, 133, 233, 0.18);
+		--good: #0ca30c; --warn: #fab219; --bad: #e66767;
+		--mono: ui-monospace, 'SF Mono', Menlo, monospace;
+	}
+	* { box-sizing: border-box; margin: 0; padding: 0; }
+	html, body { height: 100%; }
+	body {
+		background: var(--page); color: var(--text); overflow: hidden;
+		font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+		-webkit-font-smoothing: antialiased;
+	}
+	.deck { position: fixed; inset: 0; }
+	.progress { position: fixed; top: 0; left: 0; right: 0; height: 3px; background: var(--grid); z-index: 20; }
+	.progress span { display: block; height: 100%; width: 0; background: var(--accent); transition: width 0.35s ease; }
+	.slide {
+		position: absolute; inset: 0; padding: 8vh 9vw 12vh;
+		display: flex; flex-direction: column; justify-content: center;
+		opacity: 0; visibility: hidden; transform: translateY(14px);
+		transition: opacity 0.4s ease, transform 0.4s ease; overflow: auto;
+	}
+	.slide.active { opacity: 1; visibility: visible; transform: none; }
+	.kicker { color: var(--accent); font-size: clamp(12px, 1.3vw, 15px); font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; margin-bottom: 16px; }
+	h1 { font-size: clamp(36px, 6.6vw, 78px); line-height: 1.02; letter-spacing: -0.03em; font-weight: 700; }
+	h2 { font-size: clamp(24px, 3.6vw, 44px); line-height: 1.08; letter-spacing: -0.015em; margin-bottom: 28px; font-weight: 650; }
+	.lead { font-size: clamp(17px, 2.3vw, 27px); color: var(--text2); line-height: 1.45; max-width: 20em; }
+	.lead b { color: var(--text); font-weight: 600; }
+	.accent { color: var(--accent); }
+	.cols { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(24px, 4vw, 52px); align-items: start; }
+	@media (max-width: 820px) { .cols { grid-template-columns: 1fr; gap: 24px; } }
+	ul.list { list-style: none; display: flex; flex-direction: column; gap: clamp(10px, 1.5vw, 16px); }
+	ul.list li { position: relative; padding-left: 24px; color: var(--text2); font-size: clamp(15px, 1.7vw, 20px); line-height: 1.4; }
+	ul.list li::before { content: ''; position: absolute; left: 0; top: 0.5em; width: 9px; height: 9px; border-radius: 2px; background: var(--accent); }
+	ul.list li b { color: var(--text); font-weight: 600; }
+	ul.list li code { color: var(--text); }
+	code { font-family: var(--mono); font-size: 0.88em; background: var(--surface2); padding: 1px 5px; border-radius: 4px; }
+	pre.diagram, pre.code {
+		background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+		padding: clamp(14px, 2vw, 24px); font-family: var(--mono); color: var(--text2);
+		line-height: 1.5; overflow: auto;
+	}
+	pre.diagram { font-size: clamp(8px, 1.05vw, 12.5px); }
+	pre.code { font-size: clamp(11px, 1.35vw, 15px); }
+	pre.code .c { color: var(--accent); }
+	pre.code .k { color: var(--bad); }
+	pre.code .m { color: var(--muted); }
+	pre.code .g { color: var(--good); }
+	pre.code .l { color: var(--warn); }
+	.chips { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 30px; }
+	.chip { border: 1px solid var(--border); border-radius: 999px; padding: 7px 15px; font-size: clamp(12px, 1.3vw, 14px); color: var(--text2); }
+	.chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+	.regs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; font-family: var(--mono); font-size: clamp(11px, 1.3vw, 14px); }
+	.regs .row { display: flex; justify-content: space-between; padding: 2px 8px; border-radius: 4px; border-bottom: 1px solid var(--grid); }
+	.regs .row.hot { background: var(--accent-soft); }
+	.regs .n { color: var(--text2); font-weight: 600; }
+	.regs .v { color: var(--text); }
+	.stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: clamp(16px, 3vw, 40px); }
+	.stat .n { font-size: clamp(32px, 5.6vw, 64px); font-weight: 700; letter-spacing: -0.03em; line-height: 1; color: var(--accent); }
+	.stat .t { color: var(--text2); font-size: clamp(13px, 1.5vw, 17px); margin-top: 10px; }
+	.pipeline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 12px; }
+	.node { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 18px; }
+	.node .t { font-weight: 650; font-size: clamp(14px, 1.6vw, 18px); }
+	.node .s { color: var(--muted); font-size: 12px; margin-top: 2px; font-family: var(--mono); }
+	.arrow { color: var(--accent); font-size: 24px; }
+	.shot { max-width: 100%; max-height: 70vh; border-radius: 12px; border: 1px solid var(--border); display: block; object-fit: contain; }
+	.title-wrap { max-width: 62rem; }
+	.title-wrap h2 { max-width: 20em; }
+	.badge-row { display: flex; gap: 8px; align-items: baseline; margin-bottom: 22px; }
+	.foot { position: fixed; bottom: 22px; left: 9vw; right: 9vw; display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--muted); z-index: 15; }
+	.nav { display: flex; gap: 8px; }
+	.nav button { background: var(--surface); border: 1px solid var(--border); color: var(--text2); width: 34px; height: 34px; border-radius: 8px; cursor: pointer; font-size: 16px; line-height: 1; }
+	.nav button:hover { border-color: var(--accent); color: var(--accent); }
+	.hint { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); font-size: 11px; color: var(--muted); z-index: 15; }
+	.diag { font-family: var(--mono); font-size: clamp(11px, 1.3vw, 14px); padding: 3px 0; }
+	.diag .e { color: var(--bad); } .diag .w { color: var(--warn); }
+	@media (max-width: 600px) { .hint { display: none; } .stats { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="progress"><span></span></div>
+<div class="deck">
+
+	<section class="slide">
+		<div class="title-wrap">
+			<div class="badge-row"><span class="kicker">eBPF × WebAssembly · all Rust · no server</span></div>
+			<h1>eBPF <span class="accent">Playground</span></h1>
+			<p class="lead" style="margin-top: 24px;">Write, verify and single-step eBPF programs — an entire eBPF machine reimplemented in Rust, running inside a browser tab.</p>
+		</div>
+		<div class="chips">
+			<span class="chip on">assembler</span><span class="chip on">verifier</span>
+			<span class="chip on">interpreter</span><span class="chip on">Rust → WASM</span>
+		</div>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">The idea</span>
+		<h2>Make the opaque machine visible</h2>
+		<div class="cols">
+			<ul class="list">
+				<li>eBPF's <b>verifier</b> is famously hard to reason about, and its bytecode executes somewhere you can't watch — deep in the kernel.</li>
+				<li>So instead of running eBPF <b>in</b> the kernel, this project <b>reimplements the machine</b> in Rust and compiles it to WebAssembly.</li>
+			</ul>
+			<ul class="list">
+				<li>Programs <b>assemble, verify and execute entirely client-side</b> — every register, every stack byte, every step on screen.</li>
+				<li>No Docker, no Linux, no server. It even runs natively on a Mac.</li>
+				<li>A learning tool for exactly the thing that's normally invisible.</li>
+			</ul>
+		</div>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">Architecture</span>
+		<h2>The whole toolchain in one tab</h2>
+		<pre class="diagram">┌──────────────────────────── Browser tab ─────────────────────────────┐
+│  ebpf-vm  (Rust → WASM)                    SvelteKit                 │
+│  · assembler   (labels, 2-pass)        ◄── editor + examples         │
+│  · verifier-lite (r10 writes, jump     ──► diagnostics in listing    │
+│      bounds, div/0, unknown helpers…)                                │
+│  · disassembler                        ──► bytecode listing          │
+│  · stepping interpreter                ──► registers · stack dump    │
+│      r0–r10, 512 B stack, packet mem       current insn · helper log │
+└──────────────────────────────────────────────────────────────────────┘</pre>
+		<p class="lead" style="margin-top: 22px; max-width: 34em; font-size: clamp(15px, 1.7vw, 20px);">Four components, one Rust crate. The browser never leaves the page.</p>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">Component 1 · the assembler</span>
+		<h2>A friendly assembly dialect</h2>
+		<div class="cols">
+			<pre class="code"><span class="m">; sum the packet bytes</span>
+        mov r0, 0
+        add r2, r1        <span class="m">; end ptr</span>
+<span class="l">loop:</span>   jge r1, r2, done
+        ldxb r3, [r1+0]
+        add r0, r3
+        add r1, 1
+        ja loop
+<span class="l">done:</span>   exit</pre>
+			<ul class="list">
+				<li><b>Two passes:</b> collect labels, then emit — so forward jumps just work.</li>
+				<li>Labels, comments (<code>;</code> <code>#</code> <code>//</code>), and the kernel-doc mnemonic names.</li>
+				<li>Full ALU (64- and 32-bit), <code>lddw</code>, every load/store width, all conditional jumps, <code>call</code>, <code>exit</code>.</li>
+			</ul>
+		</div>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">Component 2 · the verifier-lite</span>
+		<h2>The kernel's gatekeeper, in miniature</h2>
+		<div class="cols">
+			<ul class="list">
+				<li>Writes to <b>r10</b>, the read-only frame pointer.</li>
+				<li>Jumps that land <b>out of bounds</b> — or in the middle of an <code>lddw</code>.</li>
+				<li><b>Division by zero</b>, unknown <b>helper</b> ids, out-of-range shifts.</li>
+				<li>A program with <b>no exit</b>, or one that can fall off the end.</li>
+			</ul>
+			<div>
+				<div style="color: var(--muted); font-size: 12px; margin-bottom: 10px; font-family: var(--mono);">diagnostics, inline at the offending instruction</div>
+				<div class="diag"><span class="e">error@0:</span> r10 is the read-only frame pointer</div>
+				<div class="diag"><span class="e">error@1:</span> jump target 101 out of bounds</div>
+				<div class="diag"><span class="e">error@2:</span> division by zero immediate</div>
+				<div class="diag"><span class="e">error@3:</span> unknown helper function 77</div>
+				<div class="diag"><span class="w">warn @7:</span> shift amount 40 outside 0–63</div>
+			</div>
+		</div>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">Component 3 · the interpreter</span>
+		<h2>A real machine, stepped one instruction at a time</h2>
+		<div class="cols">
+			<ul class="list">
+				<li><b>Registers</b> r0–r10, 64-bit, r10 the read-only frame pointer.</li>
+				<li>A <b>512-byte stack</b> below r10 and an editable <b>packet</b> at r1/r2 — every access bounds-checked with an explaining error.</li>
+				<li><b>Spec-correct semantics:</b> 32-bit ops zero-extend; div/mod by zero yield 0 / unchanged.</li>
+				<li>Two <b>log helpers</b> that clobber r1–r5 like the real ones; a 100k-instruction budget.</li>
+			</ul>
+			<div class="regs">
+				<div class="row hot"><span class="n">r0</span><span class="v">0x2a</span></div>
+				<div class="row"><span class="n">r1</span><span class="v">0x1000000c</span></div>
+				<div class="row"><span class="n">r2</span><span class="v">0x8</span></div>
+				<div class="row"><span class="n">r3</span><span class="v">0x5</span></div>
+				<div class="row"><span class="n">r6</span><span class="v">0x0</span></div>
+				<div class="row"><span class="n">r10</span><span class="v">0x20000200</span></div>
+			</div>
+		</div>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">What you see</span>
+		<h2>Six panels that move together</h2>
+		<ul class="list">
+			<li>An <b>editor</b> with five worked examples — packet summing, Fibonacci, stack spills, helpers, and a tour of programs the verifier rejects.</li>
+			<li>A live <b>bytecode listing</b> with hex encodings and diagnostics pinned to each slot.</li>
+			<li><b>Registers</b> (hex + decimal + ABI role), a <b>stack hex-dump</b>, the <b>current instruction</b>, and a <b>helper log</b> — the changed register and the exact bytes written light up on every step.</li>
+			<li><b>Step</b>, <b>play</b> at an adjustable speed, or <b>run to end</b> — with an exit-status pill.</li>
+		</ul>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">The real thing · mid-execution</span>
+		<img class="shot" src="playground.jpg" alt="eBPF Playground stepping through a program, registers and stack live" />
+	</section>
+
+	<section class="slide">
+		<span class="kicker">Engineering notes</span>
+		<h2>Small details that matter</h2>
+		<ul class="list">
+			<li><b>The whole machine is one crate.</b> Assembler, verifier, disassembler and interpreter share the ISA definition — the disassembler is reused to render every executed instruction.</li>
+			<li><b>64-bit truth across the boundary.</b> eBPF registers are u64, but a JS number only holds 53 bits — so register values cross into the browser as <b>hex strings</b> and the UI derives decimal with BigInt.</li>
+			<li><b>Native, browser-free tests.</b> The interpreter and assembler are tested with plain <code>cargo test</code> — 8 cases covering loops, stack round-trips, signed compares and every error path.</li>
+			<li><b>Runs anywhere.</b> Because the eBPF machine <i>is</i> the WASM module, there's nothing Linux-specific to install.</li>
+		</ul>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">By the numbers</span>
+		<h2>What it adds up to</h2>
+		<div class="stats">
+			<div class="stat"><div class="n">4</div><div class="t">components in one Rust crate</div></div>
+			<div class="stat"><div class="n">8</div><div class="t">native tests, no browser</div></div>
+			<div class="stat"><div class="n">5</div><div class="t">worked example programs</div></div>
+			<div class="stat"><div class="n">0</div><div class="t">servers · runs fully client-side</div></div>
+		</div>
+	</section>
+
+	<section class="slide">
+		<span class="kicker">Run it</span>
+		<h2>One command</h2>
+		<div class="cols">
+			<pre class="code"><span class="m"># the machine is the WASM module —</span>
+<span class="m"># no Docker, no Linux needed</span>
+cd web &amp;&amp; pnpm install &amp;&amp; pnpm dev
+<span class="m"># → http://localhost:5174</span>
+
+<span class="m"># rebuild the VM after editing vm/</span>
+wasm-pack build vm --target web \
+  --release --no-pack \
+  --out-dir ../web/src/lib/ebpf-vm</pre>
+			<ul class="list">
+				<li>Pick an example, hit <b>step</b>, and watch the registers and stack change.</li>
+				<li>Un-comment a line in the "why verifiers exist" example to see a diagnostic appear.</li>
+				<li><code>cd vm &amp;&amp; cargo test</code> runs the interpreter suite natively.</li>
+			</ul>
+		</div>
+	</section>
+
+	<section class="slide">
+		<div class="title-wrap">
+			<span class="kicker">The machine, made legible</span>
+			<h2 style="font-size: clamp(28px, 4.6vw, 56px); margin-bottom: 20px;">Everything the kernel's eBPF machine does in the dark, this one does in the light — one instruction at a time.</h2>
+			<div class="pipeline">
+				<div class="node"><div class="t">assemble</div><div class="s">source → bytecode</div></div>
+				<span class="arrow">→</span>
+				<div class="node"><div class="t">verify</div><div class="s">reject the unsafe</div></div>
+				<span class="arrow">→</span>
+				<div class="node"><div class="t">step</div><div class="s">watch it run</div></div>
+			</div>
+		</div>
+	</section>
+
+</div>
+
+<div class="foot">
+	<span>eBPF Playground</span>
+	<span class="counter">1 / 11</span>
+	<span class="nav"><button class="prev" aria-label="Previous">‹</button><button class="next" aria-label="Next">›</button></span>
+</div>
+<div class="hint">← → or space to navigate</div>
+
+<script>
+	const slides = [...document.querySelectorAll('.slide')];
+	const bar = document.querySelector('.progress span');
+	const counter = document.querySelector('.counter');
+	let i = 0;
+	function show(n) {
+		i = Math.max(0, Math.min(slides.length - 1, n));
+		slides.forEach((s, k) => s.classList.toggle('active', k === i));
+		bar.style.width = ((i + 1) / slides.length * 100) + '%';
+		counter.textContent = (i + 1) + ' / ' + slides.length;
+		history.replaceState(null, '', '#' + (i + 1));
+	}
+	const next = () => show(i + 1), prev = () => show(i - 1);
+	addEventListener('keydown', (e) => {
+		if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); next(); }
+		else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); prev(); }
+		else if (e.key === 'Home') show(0);
+		else if (e.key === 'End') show(slides.length - 1);
+	});
+	document.querySelector('.nav .prev').onclick = prev;
+	document.querySelector('.nav .next').onclick = next;
+	let x0 = null;
+	addEventListener('touchstart', (e) => (x0 = e.touches[0].clientX), { passive: true });
+	addEventListener('touchend', (e) => {
+		if (x0 === null) return;
+		const dx = e.changedTouches[0].clientX - x0;
+		if (Math.abs(dx) > 50) dx < 0 ? next() : prev();
+		x0 = null;
+	});
+	show((parseInt(location.hash.slice(1)) || 1) - 1);
+</script>
+</body>
+</html>

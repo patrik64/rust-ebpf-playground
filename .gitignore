@@ -1,0 +1,6 @@
+target/
+node_modules/
+web/.svelte-kit/
+web/build/
+web/src/lib/ebpf-vm/
+.DS_Store
