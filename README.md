@@ -20,6 +20,10 @@ the visualizer.
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+## Try
+
+live at https://rust-ebpf-playground.vercel.app/ 
+
 ## Run
 
 ```sh
